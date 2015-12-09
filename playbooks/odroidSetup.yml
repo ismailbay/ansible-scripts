@@ -1,0 +1,66 @@
+---
+- name: initial odroid setup
+  hosts: odroids-local
+  user: root
+  vars:
+    - root_password: '$6$rounds=656000$L3vOkMLez1UaffjZ$Mjy6hs49wUy0u8gO22FfIuqFdtIfbItamYu653.tgBiFDUzNTyUKwM0Mb24kbtEOrujHmzAf4yja5AX6dDArh1'
+    - ismail_password: '$6$rounds=656000$XGJkUrvxpoMdo8jk$uMx8Bh5Nn68mZ8kbc15kKBpRniK5ue3nc.dgOaPahH54fOhc9RiV6c9TdJ6v18fa6d5YdNmx3A7L4DL9qDyei0'
+
+  tasks:
+  - name: Change root password
+    user:
+      name=root
+      password={{ root_password }}
+
+  - name: Add user ismail
+    user:
+      name=ismail
+      password={{ ismail_password }}
+      comment="Ismail Bay"
+      state=present
+      shell=/bin/bash
+
+  - name: Add SSH public key to user ismail
+    authorized_key:
+      user=ismail
+      key="{{ lookup('file', "~/.ssh/id_rsa.pub") }}"
+
+  - name: Add user ismail to sudoers
+    lineinfile:
+      "dest=/etc/sudoers
+      regexp='^ismail ALL'
+      line='ismail ALL=(ALL) NOPASSWD: ALL'
+      state=present"
+
+  - name: Disallow root SSH access
+    lineinfile:
+      dest=/etc/ssh/sshd_config
+      regexp="^PermitRootLogin"
+      line="PermitRootLogin no"
+      state=present
+    notify:
+      - restart sshd
+
+  - name: Disallow SSH GSS API authentication
+    lineinfile:
+      dest=/etc/ssh/sshd_config
+      regexp="^GSSAPIAuthentication"
+      line="GSSAPIAuthentication no"
+      state=present
+    notify:
+      - restart sshd
+
+  - name: Run apt-get update & upgrade
+    apt: update_cache=yes upgrade=dist
+
+  - name: Install Packages
+    apt: name={{item}} state=latest
+    with_items:
+         - vim
+         - git
+  
+  handlers:
+  - name: restart sshd
+    service:
+      name=sshd
+      state=restarted
